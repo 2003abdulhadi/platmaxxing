@@ -36,17 +36,23 @@ async def main():
         print(f"The ideal selling price for {order.item.name} is {idealPrice}")
         ordersToUpdate[order] = idealPrice
 
-    if session:
-        for order, newPrice in ordersToUpdate.items():
+        if session:
+            if order.price == idealPrice:
+                print(f'No need to update {order.item.name}')
+                print()
+                continue
             print(f'Updating price for {order.item.name}')
             itemRank = order.item.rank if type(order.item) is common.Upgradeable else None
-            pywmapi.orders.update_order(session,
-                                        order.id,
-                                        pywmapi.orders.OrderUpdateItem(platinum=newPrice,
-                                                                       quantity=order.quantity,
-                                                                       visible=True,
-                                                                       rank=itemRank))
-        print("Prices updated!")
-
+            updatedOrder = pywmapi.orders.update_order(
+                session,
+                order.id,
+                pywmapi.orders.OrderUpdateItem(
+                    platinum=idealPrice,
+                    quantity=order.quantity,
+                    visible=True,
+                    rank=itemRank))
+            print(f'Updated price for {updatedOrder.item.en.item_name} is {updatedOrder.platinum}')
+        print()
+            
 if __name__ == '__main__':
     asyncio.run(main())

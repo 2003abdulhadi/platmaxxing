@@ -8,7 +8,7 @@ async def getCurrentPrices(item: Item):
     apiUrl = f'https://api.warframe.market/v2/orders/item/{item.urlName}'
 
     orders = await getData(apiUrl)
-    orders = orders['data']
+    orders: Dict[str, Any] = orders['data']
 
     if type(item) is Upgradeable:
         orders = [order for order in orders if order['rank'] == item.rank]
@@ -16,10 +16,12 @@ async def getCurrentPrices(item: Item):
     if any(order['user']['status'] == 'ingame' for order in orders):
         prices = [order['platinum'] for order in orders
                 if order['type'] == 'sell'
-                and order['user']['status'] == 'ingame']
+                and order['user']['status'] == 'ingame'
+                and order['user']['ingameName'] != 'ParadoxMusic']
     else:
         prices = [order['platinum'] for order in orders
-                if order['type'] == 'sell']
+                if order['type'] == 'sell'
+                and order['user']['ingameName'] != 'ParadoxMusic']
         
     prices.sort()
 
