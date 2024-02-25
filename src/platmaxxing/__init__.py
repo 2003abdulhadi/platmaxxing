@@ -1,5 +1,6 @@
-from . import (
+from .platmaxxing import (
     accountOrders,
     common,
-    priceFiltering
+    priceFiltering,
+    setStats
 )

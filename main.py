@@ -1,7 +1,7 @@
 import asyncio
 import sys
 from typing import Dict
-from src.platmaxxing import *
+from platmaxxing import *
 import pywmapi
 
 async def main():
