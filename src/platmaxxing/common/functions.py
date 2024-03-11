@@ -1,8 +1,10 @@
-from typing import Any, Dict
-from .models import *
 import asyncio
 import aiohttp
+from datetime import timedelta
+from ratelimit import limits, sleep_and_retry
 
+@sleep_and_retry
+@limits(calls=20, period=timedelta(seconds=5).total_seconds())
 async def getData(apiUrl):
     async with aiohttp.ClientSession() as session:
         async with session.get(apiUrl) as response:
@@ -14,21 +16,3 @@ async def getData(apiUrl):
             else:
                 print(response)
                 raise Exception()
-            
-async def createItem(urlName: str, rank: int=None) -> Item:
-    apiUrl = f'https://api.warframe.market/v2/items/{urlName}'
-
-    item: Dict[str, Any] = await getData(apiUrl)
-    if not item:
-        raise Exception()
-    item = item['data']
-
-    if not isinstance(rank, int):
-        return Item(item['i18n']['en']['name'],
-                    urlName
-                    )
-    
-    return Upgradeable(item['i18n']['en']['name'],
-                       urlName,
-                       rank
-                       )

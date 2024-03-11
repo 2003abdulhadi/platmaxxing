@@ -1,60 +1,67 @@
-from math import floor
 import asyncio
+import pywmapi
 import numpy as np
-from .enums import *
-from ..common import *
+from math import floor
+from platmaxxing.priceFiltering.enums import *
+from platmaxxing.common import *
 
-async def getCurrentPrices(item: Item):
-    apiUrl = f'https://api.warframe.market/v2/orders/item/{item.urlName}'
+async def getCurrentPrices(item: pywmapi.orders.OrderItem) -> list[int]:
 
-    orders = await getData(apiUrl)
-    orders: Dict[str, Any] = orders['data']
+    orders = pywmapi.orders.get_orders(item.item.url_name)
 
-    if type(item) is Upgradeable:
-        orders = [order for order in orders if order['rank'] == item.rank]
-    
-    if any(order['user']['status'] == 'ingame' for order in orders):
-        prices = [order['platinum'] for order in orders
-                if order['type'] == 'sell'
-                and order['user']['status'] == 'ingame'
-                and order['user']['ingameName'] != 'ParadoxMusic']
+    orders = [order for order in orders if order.order_type.value == 'sell']
+
+    if item.mod_rank is not None:
+        orders = [order for order in orders if order.mod_rank == item.mod_rank]
+
+    prices = []
+
+    if any(order.user.status.value == 'ingame' for order in orders):
+        prices = [order.platinum for order in orders
+                  if order.user.status.value == 'ingame'
+                  and (order.user.id != item.user.id if item.user else True)]
+    elif any(order.user.status.value == 'online' for order in orders):
+        prices = [order.platinum for order in orders
+                  if order.user.status.value == 'online'
+                  and (order.user.id != item.user.id if item.user else True)]
     else:
-        prices = [order['platinum'] for order in orders
-                if order['type'] == 'sell'
-                and order['user']['ingameName'] != 'ParadoxMusic']
-        
+        prices = [order.platinum for order in orders
+                  if (order.user.id != item.user.id if item.user else True)]
+
     prices.sort()
 
-    return prices
+    return prices if prices else [0]
 
-async def getHistoricMinimums(item: Item, period: Period=Period.short):
-    apiUrl = f'https://api.warframe.market/v1/items/{item.urlName}/statistics'
+async def getHistoricMinimums(item: pywmapi.orders.OrderItem, period: Period=Period.short) -> list[int]:
+    apiUrl = f'https://api.warframe.market/v1/items/{item.item.url_name}/statistics'
     
     orders = await getData(apiUrl)
     orders = orders['payload']['statistics_closed'][f'{period.value}']
 
-    if type(item) is Upgradeable:
-        orders = [order for order in orders if order['mod_rank'] == item.rank]
+    if item.mod_rank is not None:
+        orders = [order for order in orders if order['mod_rank'] == item.mod_rank]
     
     minimumPrices = [order['min_price'] for order in orders]
-    return minimumPrices
+    return minimumPrices if minimumPrices else [0]
 
-async def getMedianPrices(item: Item, period: Period=Period.short):
-    apiUrl = f'https://api.warframe.market/v1/items/{item.urlName}/statistics'
+async def getMedianPrices(item: pywmapi.orders.OrderItem, period: Period=Period.short) -> list[int]:
+    apiUrl = f'https://api.warframe.market/v1/items/{item.item.url_name}/statistics'
     
     orders = await getData(apiUrl)
     orders = orders['payload']['statistics_closed'][f'{period.value}']
 
-    if type(item) is Upgradeable:
-        orders = [order for order in orders if order['mod_rank'] == item.rank]
+    if item.mod_rank is not None:
+        orders = [order for order in orders if order['mod_rank'] == item.mod_rank]
     
     medianPrices = [order['median'] for order in orders]
-    return medianPrices
+    return medianPrices if medianPrices else [0]
 
-async def getIdealSellingPrice(item: Item):
-    currentPrices = await getCurrentPrices(item)
-    minimumPrices = await getHistoricMinimums(item)
-    medianPrices = await getMedianPrices(item)
+async def getIdealSellingPrice(item: pywmapi.orders.OrderItem):
+    currentPrices, minimumPrices, medianPrices = await asyncio.gather(
+        getCurrentPrices(item),
+        getHistoricMinimums(item),
+        getMedianPrices(item)
+    )
 
     minimumPrices.sort()
     medianPrices.sort()
@@ -81,12 +88,13 @@ def filterOutliers(prices):
     filteredPrices = [x for x in prices if lowerBound <= x <= upperBound]
     
     return filteredPrices
+
 # Example usage
 async def main():
-    item = await createItem('saryn_prime_set')
-    idealPrice = await getIdealSellingPrice(item.urlName)
+    item = pywmapi.orders.get_orders_by_username('ParadoxMusic')[1][0]
+    idealPrice = await getIdealSellingPrice(item)
 
-    print(f"The ideal selling price for Saryn Prime Set is {idealPrice}")
+    print(f"The ideal selling price for {item.item.en.item_name} is {idealPrice}")
 
 if __name__ == '__main__':
     asyncio.run(main())

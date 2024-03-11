@@ -1,8 +1,10 @@
+"""_summary_
+"""
+
 import asyncio
 import sys
-from typing import Dict
-from platmaxxing import *
 import pywmapi
+from platmaxxing import *
 
 async def main():
     email = ''
@@ -19,38 +21,57 @@ async def main():
 
     try:
         session = pywmapi.auth.signin(email, password)
-        print('Logged in Succesfully!')
+        print('Logged in Successfully!')
     except Exception as e:
         print(e)
         print("Failed to login, prices will not be updated")
     
-    profileName = "ParadoxMusic"
-    print(f'Getting orders for {profileName}')
-    orders = await accountOrders.getAccountOrders(profileName, common.OrderType.sell)
+    username = ''
+    orders = ()
+    if session:
+        print(f'Getting orders for {session.user.ingame_name}')
+        orders = pywmapi.orders.get_current_orders(session)
+    else:
+        def getAccountOrders():
+            global username
+            username = input("Enter a username: ")
+            try:
+                orders = pywmapi.orders.get_orders_by_username(username)
+                print(f'Getting orders for {username}')
+                return orders
+            except:
+                print("Invalid username")
+                getAccountOrders()
 
-    ordersToUpdate: Dict[common.Order, int] = {}
+        orders = getAccountOrders()
+    username = username if username else session.user.ingame_name
+    user = pywmapi.auth.UserShort(None,None,None,None,None,username)
 
-    for order in orders:
-        print(f'Finding ideal price for {order.item.name}')
-        idealPrice = await priceFiltering.getIdealSellingPrice(order.item)
-        print(f"The ideal selling price for {order.item.name} is {idealPrice}")
-        ordersToUpdate[order] = idealPrice
+    print('Getting ideal prices')
+    idealPrices = await asyncio.gather(
+        *[priceFiltering.getIdealSellingPrice(sellOrder) for sellOrder in orders[1]]
+    )
+
+    for sellOrder, idealPrice in zip(orders[1], idealPrices):
+        sellOrder.user = user
+
+        print(f"The ideal selling price for {sellOrder.item.en.item_name} is {idealPrice}")
 
         if session:
-            if order.price == idealPrice:
-                print(f'No need to update {order.item.name}')
+            if sellOrder.platinum == idealPrice:
+                print(f'No need to update {sellOrder.item.en.item_name}')
                 print()
                 continue
-            print(f'Updating price for {order.item.name}')
-            itemRank = order.item.rank if type(order.item) is common.Upgradeable else None
+                
+            print(f'Updating price for {sellOrder.item.en.item_name}')
             updatedOrder = pywmapi.orders.update_order(
                 session,
-                order.id,
+                sellOrder.id,
                 pywmapi.orders.OrderUpdateItem(
                     platinum=idealPrice,
-                    quantity=order.quantity,
-                    visible=True,
-                    rank=itemRank))
+                    quantity=sellOrder.quantity,
+                    visible=sellOrder.visible,
+                    rank=sellOrder.mod_rank))
             print(f'Updated price for {updatedOrder.item.en.item_name} is {updatedOrder.platinum}')
         print()
             
